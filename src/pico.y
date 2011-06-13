@@ -223,25 +223,24 @@ extern FILE* yyin;
 
 int main(int argc, char* argv[]) 
 {
-   if (argc != 2) {
-     printf("uso: %s <input_file>. Try again!\n", argv[0]);
-     exit(-1);
-   }
-   yyin = fopen(argv[1], "r");
-   if (!yyin) {
-     printf("Uso: %s <input_file>. Could not find %s. Try again!\n", 
-         argv[0], argv[1]);
-     exit(-1);
-   }
+	if (argc != 2) {
+		printf("uso: %s <input_file>. Try again!\n", argv[0]);
+		exit(-1);
+	}
+	yyin = fopen(argv[1], "r");
+	if (!yyin) {
+		printf("Uso: %s <input_file>. Could not find %s. Try again!\n", argv[0], argv[1]);
+		exit(-1);
+	}
 
-   progname = argv[0];
+	progname = argv[0];
 
-   if (!yyparse()) 
-      printf("OKAY.\n");
-   else 
-      printf("ERROR.\n");
-   
-   switch(syntax_tree->type) {
+	if (!yyparse()) 
+		printf("OKAY.\n");
+	else 
+		printf("ERROR.\n");
+
+	/*switch(syntax_tree->type) {
 	case int_node: 
 		printf("A AST se limita a uma folha rotulada por: %s\n", syntax_tree->lexeme);
 		break;
@@ -251,11 +250,12 @@ int main(int argc, char* argv[])
 	case minus_node:
 		printf("Subtracao de %s com %s.\n", syntax_tree->children[0]->lexeme, syntax_tree->children[1]->lexeme);
 		break;
-   }
-   
-   printf("Altura da arvore final: %i.\n", height(syntax_tree));
+	}*/
 
-   return(0);
+	printf("Arvore final (altura %i):\n", height(syntax_tree));
+	printTree(syntax_tree);
+
+	return(0);
 }
 
 yyerror(char* s) {
