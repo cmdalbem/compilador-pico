@@ -49,6 +49,10 @@ typedef int Node_type;
 #define true_node      335
 #define false_node     336
 
+// adicionado
+#define end_node	   337
+#define else_node	   338
+
 /** Estrutura de dados parcial para o no da arvore.
  *  Trata-se de uma arvore generalizada: qualquer no pode ter de 0 ateh
  *  MAX_CHILDREN_NUMBER filhos. */

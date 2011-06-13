@@ -40,68 +40,68 @@
       know about them.  */
    enum yytokentype {
      IDF = 258,
-     INT = 259,
-     DOUBLE = 260,
-     FLOAT = 261,
-     CHAR = 262,
-     QUOTE = 263,
-     DQUOTE = 264,
-     LE = 265,
-     GE = 266,
-     EQ = 267,
-     NE = 268,
-     AND = 269,
-     OR = 270,
-     NOT = 271,
-     IF = 272,
-     THEN = 273,
-     ELSE = 274,
-     WHILE = 275,
-     INT_LIT = 276,
-     F_LIT = 277,
-     END = 278,
-     TRUE = 279,
-     FALSE = 280,
-     REAL = 281,
-     FOR = 282,
-     NEXT = 283,
-     REPEAT = 284,
-     UNTIL = 285,
-     CASE = 286,
-     CONST = 287
+     CONST = 259,
+     INT = 260,
+     DOUBLE = 261,
+     FLOAT = 262,
+     REAL = 263,
+     CHAR = 264,
+     QUOTE = 265,
+     DQUOTE = 266,
+     LE = 267,
+     GE = 268,
+     EQ = 269,
+     NE = 270,
+     AND = 271,
+     OR = 272,
+     NOT = 273,
+     IF = 274,
+     THEN = 275,
+     ELSE = 276,
+     WHILE = 277,
+     FOR = 278,
+     NEXT = 279,
+     REPEAT = 280,
+     UNTIL = 281,
+     CASE = 282,
+     END = 283,
+     INT_LIT = 284,
+     F_LIT = 285,
+     TRUE = 286,
+     FALSE = 287
    };
 #endif
 /* Tokens.  */
 #define IDF 258
-#define INT 259
-#define DOUBLE 260
-#define FLOAT 261
-#define CHAR 262
-#define QUOTE 263
-#define DQUOTE 264
-#define LE 265
-#define GE 266
-#define EQ 267
-#define NE 268
-#define AND 269
-#define OR 270
-#define NOT 271
-#define IF 272
-#define THEN 273
-#define ELSE 274
-#define WHILE 275
-#define INT_LIT 276
-#define F_LIT 277
-#define END 278
-#define TRUE 279
-#define FALSE 280
-#define REAL 281
-#define FOR 282
-#define NEXT 283
-#define REPEAT 284
-#define UNTIL 285
-#define CASE 286
-#define CONST 287
+#define CONST 259
+#define INT 260
+#define DOUBLE 261
+#define FLOAT 262
+#define REAL 263
+#define CHAR 264
+#define QUOTE 265
+#define DQUOTE 266
+#define LE 267
+#define GE 268
+#define EQ 269
+#define NE 270
+#define AND 271
+#define OR 272
+#define NOT 273
+#define IF 274
+#define THEN 275
+#define ELSE 276
+#define WHILE 277
+#define FOR 278
+#define NEXT 279
+#define REPEAT 280
+#define UNTIL 281
+#define CASE 282
+#define END 283
+#define INT_LIT 284
+#define F_LIT 285
+#define TRUE 286
+#define FALSE 287
 
 
 
@@ -111,7 +111,7 @@ typedef union YYSTYPE
 {
 
 /* Line 1676 of yacc.c  */
-#line 13 "pico.y"
+#line 12 "pico.y"
 
   char* cadeia;
   struct _node * no;
