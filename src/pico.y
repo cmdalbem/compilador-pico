@@ -7,7 +7,6 @@
   #include <stdlib.h>
   #include "node.h"
 
-
 %}
 
 %union {
@@ -15,50 +14,60 @@
   struct _node * no;
 }
 
+%token<no> IDF
+%token<no> CONST
+%token<no> INT
+%token<no> DOUBLE
+%token<no> FLOAT
+%token<no> REAL
+%token<no> CHAR
+%token<no> QUOTE
+%token<no> DQUOTE
+%token<no> LE
+%token<no> GE
+%token<no> EQ
+%token<no> NE
+%token<no> AND
+%token<no> OR
+%token<no> NOT
+%token<no> IF
+%token<no> THEN
+%token<no> ELSE
+%token<no> WHILE
+%token<no> FOR
+%token<no> NEXT
+%token<no> REPEAT
+%token<no> UNTIL
+%token<no> CASE
+%token<no> END
 
-%token IDF
-%token INT
-%token DOUBLE
-%token FLOAT
-%token CHAR
-%token QUOTE
-%token DQUOTE
-%token LE
-%token GE
-%token EQ
-%token NE
-%token AND
-%token OR
-%token NOT
-%token IF
-%token THEN
-%token ELSE
-%token WHILE
 %token<cadeia> INT_LIT
 %token<cadeia> F_LIT
-%token END
-%token TRUE
-%token FALSE
-%token REAL
-%token FOR
-%token NEXT
-%token REPEAT
-%token UNTIL
-%token CASE
-%token CONST
+%token<no> TRUE
+%token<no> FALSE
 
-%type<no> code 
+%type<no> code
+%type<no> declaracoes 
+%type<no> declaracao
+%type<no> listadeclaracao
+%type<no> tipo
+%type<no> tipounico
+%type<no> tipolista
+%type<no> listadupla
 %type<no> acoes
 %type<no> comando
-%type<no> enunciado
+%type<no> lvalue
+%type<no> listaexpr
 %type<no> expr
-
+%type<no> chamaproc
+%type<no> enunciado
+%type<no> fiminstcontrole
+%type<no> expbool
 
 %start code
 
- /* A completar com seus tokens - compilar com 'yacc -d' */
-
 %%
+
 code: declaracoes acoes
     | acoes { $$ = $1; syntax_tree = $$;  }
     ;
@@ -105,61 +114,104 @@ lvalue: IDF
       | IDF '[' listaexpr ']'
       ;
 
-listaexpr: expr
-	   | expr ',' listaexpr
+listaexpr: expr             { $$ = $1; }
+	   | expr ',' listaexpr { Node **c;
+	   						  pack_nodes(&c, 0, $1);
+							  pack_nodes(&c, 0, $3);
+							  $$ = create_node(0, decl_list_node, NULL, NULL, 2, c);
+							}
 	   ;
 
-expr: expr '+' expr {	Node **children;
-						pack_nodes(&children,0,$1);
-						pack_nodes(&children,1,$3);
-						$$ = create_node(0, plus_node, "+", NULL, 2, children);
+expr: expr '+' expr { Node **c;
+					  pack_nodes(&c, 0, $1);
+					  pack_nodes(&c, 1, $3);
+					  $$ = create_node(0, plus_node, NULL, NULL, 2, c);
 					}
-    | expr '-' expr {	Node **children;
-						pack_nodes(&children,0,$1);
-						pack_nodes(&children,1,$3);
-						$$ = create_node(0, minus_node, "-", NULL, 2, children);
+    | expr '-' expr { Node **c;
+					  pack_nodes(&c, 0, $1);
+					  pack_nodes(&c, 1, $3);
+					  $$ = create_node(0, minus_node, NULL, NULL, 2, c);
 					}
-    | expr '*' expr {	Node **children;
-						pack_nodes(&children,0,$1);
-						pack_nodes(&children,1,$3);
-						$$ = create_node(0, mult_node, "*", NULL, 2, children);
+    | expr '*' expr { Node **c;
+					  pack_nodes(&c, 0, $1);
+					  pack_nodes(&c, 1, $3);
+					  $$ = create_node(0, mult_node, NULL, NULL, 2, c);
 					}
-    | expr '/' expr {	Node **children;
-						pack_nodes(&children,0,$1);
-						pack_nodes(&children,1,$3);
-						$$ = create_node(0, div_node, "/", NULL, 2, children);
+    | expr '/' expr  { Node **c;
+					  pack_nodes(&c, 0, $1);
+					  pack_nodes(&c, 1, $3);
+					  $$ = create_node(0, div_node, NULL, NULL, 2, c);
 					}
-    | '(' expr ')' { $$ = $2; }
-    | INT_LIT	{ $$ = create_leaf(0, int_node, $1, NULL); } 
-    | F_LIT		{ $$ = create_leaf(0, float_node, $1, NULL); } 
-    | lvalue
-    | chamaproc
+    | '(' expr ')'  { $$ = $2; }
+    | INT_LIT       { $$ = create_leaf(0, int_node,   $1, NULL); } 
+    | F_LIT         { $$ = create_leaf(0, float_node, $1, NULL); }
+    | lvalue        { $$ = $1; }
+    | chamaproc     { $$ = $1; }
     ;
 
-chamaproc: IDF '(' listaexpr ')'
+chamaproc: IDF '(' listaexpr ')' { Node **c;
+								   pack_nodes(&c, 0, $1);
+								   pack_nodes(&c, 0, $3);
+								   create_node(0, proc_node, NULL, NULL, 2, c);
+								 }
          ;
 
-enunciado: expr { $$ = $1 ;}
+enunciado: expr                                          { $$ = $1 ;}
          | IF '(' expbool ')' THEN acoes fiminstcontrole
          | WHILE '(' expbool ')' '{' acoes '}'
          ;
 
-fiminstcontrole: END
-               | ELSE acoes END
+fiminstcontrole: END            { $$ = create_leaf(0, end_node, NULL, NULL); }
+               | ELSE acoes END { Node **c;
+								  pack_nodes(&c, 0, $2);
+								  $$ = create_node(0, else_node, NULL, NULL, 1, c);
+								}
                ;
 
-expbool: TRUE 
-       | FALSE
-       | '(' expbool ')'
-       | expbool AND expbool
-       | expbool OR expbool
-       | NOT expbool
-       | expr '>' expr
-       | expr '<' expr
-       | expr LE expr
-       | expr GE expr
-       | expr EQ expr
-       | expr NE expr
+expbool: TRUE                 { $$ = create_leaf(0, true_node,  NULL, NULL); }
+       | FALSE                { $$ = create_leaf(0, false_node, NULL, NULL); }
+       | '(' expbool ')'      { $$ = $2; }
+       | expbool AND expbool  { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, and_node, NULL, NULL, 2, c);
+							  }
+       | expbool OR expbool   { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, or_node, NULL, NULL, 2, c);
+							  }
+       | NOT expbool          { Node **c; pack_nodes(&c, 0, $1); $$ = create_node(0, not_node, NULL, NULL, 1, c); }
+       | expr '>' expr        { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, sup_node, NULL, NULL, 2, c);
+							  }
+       | expr '<' expr        { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, inf_node, NULL, NULL, 2, c);
+							  }
+       | expr LE expr         { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, inf_eq_node, NULL, NULL, 2, c);
+							  }
+       | expr GE expr         { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, sup_eq_node, NULL, NULL, 2, c);
+							  }
+       | expr EQ expr         { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, eq_node, NULL, NULL, 2, c);
+							  }
+       | expr NE expr         { Node **c;
+	   							pack_nodes(&c, 0, $1);
+								pack_nodes(&c, 0, $3);
+								$$ = create_node(0, neq_node, NULL, NULL, 2, c);
+							  }
        ;
 %%
  /* A partir daqui, insere-se qlqer codigo C necessario.
@@ -188,7 +240,7 @@ int main(int argc, char* argv[])
       printf("OKAY.\n");
    else 
       printf("ERROR.\n");
-      
+   
    switch(syntax_tree->type) {
 	case int_node: 
 		printf("A AST se limita a uma folha rotulada por: %s\n", syntax_tree->lexeme);
@@ -202,6 +254,8 @@ int main(int argc, char* argv[])
    }
    
    printf("Altura da arvore final: %i.\n", height(syntax_tree));
+
+   return(0);
 }
 
 yyerror(char* s) {
