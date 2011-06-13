@@ -141,5 +141,9 @@ int deep_free_node(Node* n) ;
  */
 int height(Node *n) ;
 
+/** prints in the screen tree rooted by 'n'.
+ */
+void printTree(Node* n);
+
 
 #endif
