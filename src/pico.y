@@ -43,8 +43,8 @@
 
 %token<cadeia> INT_LIT
 %token<cadeia> F_LIT
-%token<no> TRUE
-%token<no> FALSE
+%token<cadeia> TRUE
+%token<cadeia> FALSE
 
 %type<no> code
 %type<no> declaracoes 
@@ -118,29 +118,29 @@ listaexpr: expr             { $$ = $1; }
 	   | expr ',' listaexpr { Node **c;
 	   						  pack_nodes(&c, 0, $1);
 							  pack_nodes(&c, 0, $3);
-							  $$ = create_node(0, decl_list_node, NULL, NULL, 2, c);
+							  $$ = create_node(0, decl_list_node, "DECL_LIST", NULL, 2, c);
 							}
 	   ;
 
 expr: expr '+' expr { Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, $3);
-					  $$ = create_node(0, plus_node, NULL, NULL, 2, c);
+					  $$ = create_node(0, plus_node, "SOMA", NULL, 2, c);
 					}
     | expr '-' expr { Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, $3);
-					  $$ = create_node(0, minus_node, NULL, NULL, 2, c);
+					  $$ = create_node(0, minus_node, "SUBTRACAO", NULL, 2, c);
 					}
     | expr '*' expr { Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, $3);
-					  $$ = create_node(0, mult_node, NULL, NULL, 2, c);
+					  $$ = create_node(0, mult_node, "MULTIPLICACAO", NULL, 2, c);
 					}
     | expr '/' expr  { Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, $3);
-					  $$ = create_node(0, div_node, NULL, NULL, 2, c);
+					  $$ = create_node(0, div_node, "DIVISAO", NULL, 2, c);
 					}
     | '(' expr ')'  { $$ = $2; }
     | INT_LIT       { $$ = create_leaf(0, int_node,   $1, NULL); } 
@@ -152,7 +152,7 @@ expr: expr '+' expr { Node **c;
 chamaproc: IDF '(' listaexpr ')' { Node **c;
 								   pack_nodes(&c, 0, $1);
 								   pack_nodes(&c, 0, $3);
-								   create_node(0, proc_node, NULL, NULL, 2, c);
+								   create_node(0, proc_node, "PROC", NULL, 2, c);
 								 }
          ;
 
@@ -161,56 +161,59 @@ enunciado: expr                                          { $$ = $1 ;}
          | WHILE '(' expbool ')' '{' acoes '}'
          ;
 
-fiminstcontrole: END            { $$ = create_leaf(0, end_node, NULL, NULL); }
+fiminstcontrole: END            { /*$$ = create_leaf(0, end_node, "END", NULL); precisa ser tratado?*/ }
                | ELSE acoes END { Node **c;
 								  pack_nodes(&c, 0, $2);
-								  $$ = create_node(0, else_node, NULL, NULL, 1, c);
+								  $$ = create_node(0, else_node, "ELSE", NULL, 1, c);
 								}
                ;
 
-expbool: TRUE                 { $$ = create_leaf(0, true_node,  NULL, NULL); }
-       | FALSE                { $$ = create_leaf(0, false_node, NULL, NULL); }
+expbool: TRUE                 { $$ = create_leaf(0, true_node,  $1, NULL); }
+       | FALSE                { $$ = create_leaf(0, false_node, $1, NULL); }
        | '(' expbool ')'      { $$ = $2; }
        | expbool AND expbool  { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, and_node, NULL, NULL, 2, c);
+								$$ = create_node(0, and_node, "AND", NULL, 2, c);
 							  }
        | expbool OR expbool   { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, or_node, NULL, NULL, 2, c);
+								$$ = create_node(0, or_node, "OR", NULL, 2, c);
 							  }
-       | NOT expbool          { Node **c; pack_nodes(&c, 0, $1); $$ = create_node(0, not_node, NULL, NULL, 1, c); }
+       | NOT expbool          { Node **c; 
+	   						    pack_nodes(&c, 0, $1); 
+								$$ = create_node(0, not_node, "NOT", NULL, 1, c); 
+							  }
        | expr '>' expr        { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, sup_node, NULL, NULL, 2, c);
+								$$ = create_node(0, sup_node, "GT", NULL, 2, c);
 							  }
        | expr '<' expr        { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, inf_node, NULL, NULL, 2, c);
+								$$ = create_node(0, inf_node, "LT", NULL, 2, c);
 							  }
        | expr LE expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, inf_eq_node, NULL, NULL, 2, c);
+								$$ = create_node(0, inf_eq_node, "LE", NULL, 2, c);
 							  }
        | expr GE expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, sup_eq_node, NULL, NULL, 2, c);
+								$$ = create_node(0, sup_eq_node, "GE", NULL, 2, c);
 							  }
        | expr EQ expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, eq_node, NULL, NULL, 2, c);
+								$$ = create_node(0, eq_node, "EQ", NULL, 2, c);
 							  }
        | expr NE expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 								pack_nodes(&c, 0, $3);
-								$$ = create_node(0, neq_node, NULL, NULL, 2, c);
+								$$ = create_node(0, neq_node, "NE", NULL, 2, c);
 							  }
        ;
 %%
