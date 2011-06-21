@@ -1,11 +1,31 @@
 %{
-  /* Aqui, pode-se inserir qualquer codigo C necessario ah compilacao
-   * final do parser. Sera copiado tal como esta no inicio do y.tab.c
-   * gerado por Yacc.
-   */
-  #include <stdio.h>
-  #include <stdlib.h>
-  #include "node.h"
+	/* Aqui, pode-se inserir qualquer codigo C necessario ah compilacao
+	* final do parser. Sera copiado tal como esta no inicio do y.tab.c
+	* gerado por Yacc.
+	*/
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include "node.h"
+	#include "lista.h"
+	#include "symbol_table.h"
+
+	typedef struct _expr_attr {
+		struct node_tac *code;
+		char *local;
+	}expr_attr;
+	
+	typedef struct _code_attr {
+		struct node_tac *code;
+	}code_attr;
+	
+	char* novo_tmp() {
+		//mock code
+		static int i=0;
+		char *ret=(char*)malloc(8*sizeof(char));
+		sprintf(ret,"tmp%i", i);
+		i++;
+		return ret;
+	};
 
 %}
 
@@ -84,13 +104,23 @@
 
 %%
 
-code: declaracoes acoes { Node **c; 
+code: declaracoes acoes
+					{ 
+						  Node **c; 
 						  pack_nodes(&c, 0, $1);
 						  pack_nodes(&c, 0, $2);
-						  $$ = create_node(0, program_node, "code", NULL, 2, c);
+
+							// Attribute synth
+							code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
+							cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+							cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+
+						  $$ = create_node(0, program_node, "code", attr, 2, c);
 						  syntax_tree = $$;
 						}
-    | acoes             { $$ = $1; 
+    | acoes
+					{
+							$$ = $1; 
 						  syntax_tree = $$;  
 						}
     ;
@@ -188,23 +218,39 @@ listadupla: INT_LIT ':' INT_LIT       		   { Node **c;
 									 		   }
           ;
 
-acoes: comando ';'       { Node **c;
+acoes: comando ';'       
+						{
+							 Node **c;
 						   pack_nodes(&c, 0, $1);
 						   pack_nodes(&c, 1, create_leaf(0, semicolon_node, ";", NULL));
-						   $$ = create_node(0, acoes_node, "acoes", NULL, 2, c);
+						   
+						   // Attribute synth
+							 code_attr *attr = (code_attr*) malloc(sizeof(code_attr));;
+							 cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+
+						   $$ = create_node(0, acoes_node, "acoes", attr, 2, c);
 						 }
     | comando ';' acoes  { Node **c;
 						   pack_nodes(&c, 0, $1);
 						   pack_nodes(&c, 1, create_leaf(0, semicolon_node, ";", NULL));
 						   pack_nodes(&c, 2, $3);
-						   $$ = create_node(0, acoes_node, "acoes", NULL, 3, c);
+						   
+						   // Attribute synth
+ 							 code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
+							 cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+							 cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+						   
+						   $$ = create_node(0, acoes_node, "acoes", attr, 3, c);
 						 } 
     ;
 
-comando: lvalue '=' expr { Node **c;
-						   pack_nodes(&c, 0, $1);
-						   pack_nodes(&c, 1, create_leaf(0, attrib_node, ":=", NULL));
-						   pack_nodes(&c, 2, $3);
+comando: lvalue '=' expr { 
+							Node **c;
+							pack_nodes(&c, 0, $1);
+							pack_nodes(&c, 1, create_leaf(0, attrib_node, ":=", NULL));
+							pack_nodes(&c, 2, $3);
+							
+							
 						   $$ = create_node(0, comando_node, "comando", NULL, 3, c);
 						 } 
        | enunciado       { $$ = $1;}
@@ -229,38 +275,106 @@ listaexpr: expr             { $$ = $1; }
 							}
 	   ;
 
-expr: expr '+' expr { Node **c;
+expr: expr '+' expr {
+						// Pack nodes
+						Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, create_leaf(0, plus_node, "+", NULL));
 					  pack_nodes(&c, 2, $3);
-					  $$ = create_node(0, expr_node, "expr", NULL, 3, c);
+					  
+					  // Attribute synth
+					  expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));;
+					  attr->local = novo_tmp();
+					  cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+ 					  cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+	 					struct tac *newcode = create_inst_tac(attr->local,
+ 					  															((expr_attr*)c[0]->attribute)->local,
+ 					  															"+",
+																					((expr_attr*)c[2]->attribute)->local);
+						append_inst_tac(&attr->code, newcode);
+					  
+					  // Allocate new node
+					  $$ = create_node(0, expr_node, "expr", attr, 3, c);
 					}
     | expr '-' expr { Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, create_leaf(0, minus_node, "-", NULL));
 					  pack_nodes(&c, 2, $3);
-					  $$ = create_node(0, expr_node, "expr", NULL, 3, c);
+					  
+					  // Attribute synth
+					  expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));;
+					  attr->local = novo_tmp();
+					  cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+ 					  cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+	 					struct tac *newcode = create_inst_tac(attr->local,
+ 					  															((expr_attr*)c[0]->attribute)->local,
+ 					  															"-",
+																					((expr_attr*)c[2]->attribute)->local);
+						append_inst_tac(&attr->code, newcode);
+					  
+					  $$ = create_node(0, expr_node, "expr", attr, 3, c);
 					}
     | expr '*' expr { Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, create_leaf(0, mult_node, "*", NULL));
 					  pack_nodes(&c, 2, $3);
-					  $$ = create_node(0, expr_node, "expr", NULL, 3, c);
+					  
+					  // Attribute synth
+					  expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));;
+					  attr->local = novo_tmp();
+					  cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+ 					  cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+	 					struct tac *newcode = create_inst_tac(attr->local,
+ 					  															((expr_attr*)c[0]->attribute)->local,
+ 					  															"*",
+																					((expr_attr*)c[2]->attribute)->local);
+						append_inst_tac(&attr->code, newcode);
+					  
+					  $$ = create_node(0, expr_node, "expr", attr, 3, c);
 					}
     | expr '/' expr { Node **c;
 					  pack_nodes(&c, 0, $1);
 					  pack_nodes(&c, 1, create_leaf(0, div_node, "/", NULL));
 					  pack_nodes(&c, 2, $3);
-					  $$ = create_node(0, expr_node, "expr", NULL, 3, c);
+					  
+					  // Attribute synth
+					  expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));;
+					  attr->local = novo_tmp();
+					  cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+ 					  cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+	 					struct tac *newcode = create_inst_tac(attr->local,
+ 					  															((expr_attr*)c[0]->attribute)->local,
+ 					  															"/",
+																					((expr_attr*)c[2]->attribute)->local);
+						append_inst_tac(&attr->code, newcode);
+					  
+					  $$ = create_node(0, expr_node, "expr", attr, 3, c);
 					}
     | '(' expr ')'  { Node **c;
 					  pack_nodes(&c, 0, create_leaf(0, openpar_node, "(", NULL));
 					  pack_nodes(&c, 1, $2);
 					  pack_nodes(&c, 2, create_leaf(0, closepar_node, ")", NULL));
-					  $$ = create_node(0, tipolista_node, "expr", NULL, 3, c);
+					  
+					  // Attribute synth
+					  expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));;
+					  attr->local = ((expr_attr*)c[1]->attribute)->local;
+					  cat_tac(&attr->code, &((expr_attr*)c[1]->attribute)->code);
+					  
+					  $$ = create_node(0, tipolista_node, "expr", attr, 3, c);
 					}
-    | INT_LIT       { $$ = create_leaf(0, intlit_node, $1, NULL); } 
-    | F_LIT         { $$ = create_leaf(0, floatlit_node, $1, NULL); }
+    | INT_LIT       {
+			    					  // Attribute synth
+			    					  expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));
+			    					  attr->local = $1;
+			    					  
+    									$$ = create_leaf(0, intlit_node, $1, attr);
+    								} 
+    | F_LIT         {
+    									// Attribute synth
+    									expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));
+			    					  attr->local = $1;
+    									$$ = create_leaf(0, floatlit_node, $1, attr);
+    									}
     | lvalue        { $$ = $1; }
     | chamaproc     { $$ = $1; }
     ;
@@ -409,7 +523,10 @@ int main(int argc, char* argv[])
 
 	printf("Arvore final (altura %i):\n", height(syntax_tree));
 	printTree(syntax_tree);
-
+	
+	printf("Code:\n");
+	print_tac(stdout, ((code_attr*)syntax_tree->attribute)->code);
+	
 	return(0);
 }
 

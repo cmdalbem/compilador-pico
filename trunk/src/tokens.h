@@ -13,7 +13,7 @@
 
  #line 8 "/usr/share/bison++/bison.h"
 
-#line 12 "pico.y"
+#line 32 "pico.y"
 typedef union {
   char* cadeia;
   struct _node * no;
