@@ -14,6 +14,19 @@
 		char *local;
 	}expr_attr;
 	
+	typedef struct _array_attr {
+		struct node_tac *code;
+		char *local; //a variável tmp que contém o resultado parcial do cálcul ode deslocamento (w * e_m) para Elist, e a constante c para L
+		int desloc; //deslocamento dentro do array (nulo quando for identificador simples) - cálculo a partir da i,j,k... (w * e_k)
+	}array_attr;
+	
+	typedef struct _elist_attr {
+		struct node_tac *code;
+		char *local; //a variável tmp que contém o resultado parcial do cálcul ode deslocamento (w * e_m) para Elist, e a constante c para L
+		void *array; //ponteiro para a tabela de símbolos contendo a entrada do array
+		int ndim; //registra o número de dimensões em uma lista de índice
+	}elist_attr;
+	
 	typedef struct _code_attr {
 		struct node_tac *code;
 	}code_attr;
