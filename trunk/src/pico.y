@@ -1,10 +1,11 @@
 %{
 	/* Aqui, pode-se inserir qualquer codigo C necessario ah compilacao
-	* final do parser. Sera copiado tal como esta no inicio do y.tab.c
+	* final do parser. Sera copiado tal como esta no first do y.tab.c
 	* gerado por Yacc.
 	*/
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <string.h>
 	#include "node.h"
 	#include "lista.h"
 	#include "symbol_table.h"
@@ -18,15 +19,34 @@
 		struct node_tac *code;
 	}code_attr;
 	
+	// tipos para declaracoes de tipo
+	typedef struct _tipo_attr {
+		int size;
+		int type;
+	} tipo_attr;
+
+	typedef struct _listadupla_attr {
+		int first; // primeiro elemento da lista
+		int size;  // número de elementos da lista
+	} listadupla_attr;
+
+	typedef struct _tipolista_attr {
+		int tipo;            // tipo dos elementos da lista
+		int size;            // tamanho dos elementos da lista (ld->size * node_size(tipo))
+		listadupla_attr *ld; // informacoes sobre a lista
+	} tipolista_attr;
+	
 	#define INT_TYPE	1
 	#define FLOAT_TYPE  2
 	#define DOUBLE_TYPE	3
 	#define CHAR_TYPE	4
-	
-	//symbol_t symbol_table;
+	#define REAL_TYPE   5
+
+	symbol_t symbol_table;
+	int memoria = 0;
 
 	char* novo_tmp(/*int type*/) {
-		int type = FLOAT_TYPE;
+		int type = INT_TYPE;
 
 		/* eu implementei o tmp em funcao do deslocamento nos
 		   registradores, que depende do tipo do temporario.
@@ -39,6 +59,7 @@
 			case INT_TYPE:    tamanho = 1; break;
 			case FLOAT_TYPE:  tamanho = 4; break;
 			case DOUBLE_TYPE: tamanho = 8; break;
+			case REAL_TYPE:   tamanho = 8; break;
 			case CHAR_TYPE:   tamanho = 4; break;
 			default:
 				tamanho = 8;
@@ -48,19 +69,80 @@
 		
 		mem += tamanho;
 		return ret;
-
-		// acho que nao eh necessario mexer com tabela de simbolos,
-		// pois creio que temporarios vao em registradores... d(Rx)
-		/*
-		entry_t e;
-		sprintf(e->name, "_TMP%03d", mem);
-		e->type = type;
-		e->size = tamanho;
-		e->desloc = mem;   // mem + tamanho
-		insert(&symbol_table, e); // symbol_table global
-		return e->name;
-		*/
 	}
+
+	// "Tratamento" de erro
+	#define UNDEFINED_SYM_ERROR  -100
+	#define OUT_OF_RANGE_ERROR   -101
+	#define SYM_REDECLARED_ERROR -102
+	int picoerror(int error) {
+		if (error == UNDEFINED_SYM_ERROR)
+			fprintf(stderr, "Variavel nao declarada");
+		if (error == OUT_OF_RANGE_ERROR)
+			fprintf(stderr, "Acesso ilegal ao array");
+		if (error == SYM_REDECLARED_ERROR)
+			fprintf(stderr, "Variavel ja foi declarada");
+		return error;
+	}
+
+	int node_type(Node_type t) {
+		switch (t) {
+			case int_node:    return INT_TYPE;
+			case float_node:  return FLOAT_TYPE;
+			case double_node: return DOUBLE_TYPE;
+			case real_node:   return REAL_TYPE;
+			case char_node:   return CHAR_TYPE;
+			default:          return REAL_TYPE;
+		}
+	}
+
+	int node_size(Node_type t) {
+		switch (t) {
+			case int_node:    return 1;
+			case float_node:  return 4;
+			case double_node: return 8;
+			case real_node:   return 8;
+			case char_node:   return 4;
+			default:          return 8;
+		}
+	}
+
+	void insert_decl(Node* dec, Node* tipo) {
+		if (dec->type == idf_node) {		
+			if (lookup(symbol_table, dec->lexeme) == NULL) {
+				entry_t *e = malloc(sizeof(entry_t));
+				e->name = malloc(sizeof(char)*(strlen(dec->lexeme) + 1));
+				strcpy(e->name, dec->lexeme);
+
+				if ((tipo->type == int_node) ||
+				    (tipo->type == float_node) ||
+				    (tipo->type == double_node) ||
+				    (tipo->type == char_node) ||
+				    (tipo->type == real_node)) { 
+				    // tipos unicos
+				    e->type = node_type(tipo->type);
+				    e->size = node_size(tipo->type);
+					e->extra = NULL;
+				} else if (tipo->type == tipolista_node) {
+					e->type = ((tipolista_attr *)tipo->attribute)->tipo;
+					e->size = ((tipolista_attr *)tipo->attribute)->size;
+					e->extra = ((tipolista_attr *)tipo->attribute)->ld;
+				}
+				e->desloc = memoria;
+				memoria += e->size;
+				insert(&symbol_table, e);
+			} else {
+				// erro de variavel ja declarada
+			}
+		} else {
+			int i;
+			Node *child;
+			for (i = 0; i < dec->nb_children; i++)
+				if (dec->children != NULL)
+					insert_decl(dec->children[i], tipo);
+		}
+	}
+
 %}
 
 %union {
@@ -138,23 +220,19 @@
 
 %%
 
-code: declaracoes acoes
-					{ 
-						  Node **c; 
+code: declaracoes acoes { Node **c; 
 						  pack_nodes(&c, 0, $1);
-						  pack_nodes(&c, 0, $2);
+						  pack_nodes(&c, 1, $2);
 
-							// Attribute synth
-							code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
-							cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
-							cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+						  // Attribute synth
+						  code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
+						  //cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+						  cat_tac(&attr->code, &((expr_attr*)c[1]->attribute)->code);
 
 						  $$ = create_node(0, program_node, "code", attr, 2, c);
 						  syntax_tree = $$;
 						}
-    | acoes
-					{
-							$$ = $1; 
+    | acoes 			{ $$ = $1;
 						  syntax_tree = $$;  
 						}
     ;
@@ -167,24 +245,23 @@ declaracoes: declaracao ';'             { Node **c;
            | declaracoes declaracao ';' { Node **c;
 		   								  pack_nodes(&c, 0, $1);
 										  pack_nodes(&c, 1, $2);
-										  pack_nodes(&c, 2, create_leaf(0, semicolon_node, ";", NULL));
-										  $$ = create_node(0, decl_node, "declaracoes", NULL, 3, c);
+										  $$ = create_node(0, decl_node, "declaracoes", NULL, 2, c);
 										}
            ;
 
-declaracao: listadeclaracao ':' tipo { Node **c;
+declaracao: listadeclaracao ':' tipo { Node **c, *n;
+									   insert_decl($1, $3);
+									   print_table(symbol_table);
 									   pack_nodes(&c, 0, $1);
-									   pack_nodes(&c, 1, create_leaf(0, colon_node, ":", NULL));
-									   pack_nodes(&c, 2, $3);
-									   $$ = create_node(0, decl_node, "declaracao", NULL, 3, c);
+									   pack_nodes(&c, 1, $3);
+									   $$ = create_node(0, decl_node, "declaracao", NULL, 2, c);
 									 }
 
 listadeclaracao: IDF					 { $$ = create_leaf(0, idf_node, $1, NULL); } 
                | IDF ',' listadeclaracao { Node **c;
 			   							   pack_nodes(&c, 0, create_leaf(0, idf_node, $1, NULL));
-										   pack_nodes(&c, 1, create_leaf(0, comma_node, ",", NULL));
-										   pack_nodes(&c, 2, $3);
-										   $$ = create_node(0, decl_list_node, "lista declaracao", NULL, 3, c);
+										   pack_nodes(&c, 1, $3);
+										   $$ = create_node(0, decl_list_node, "lista declaracao", NULL, 2, c);
 										 }
                ;
 
@@ -199,13 +276,17 @@ tipounico: INT    { $$ = create_leaf(0, int_node, "int", NULL); }
 		 | REAL   { $$ = create_leaf(0, real_node, "real", NULL); }
          ;
 
-tipolista: INT '[' listadupla ']'    { Node **c;
-									   pack_nodes(&c, 0, create_leaf(0, int_node, "int", NULL));
-									   pack_nodes(&c, 1, create_leaf(0, opencol_node, "[", NULL));
-									   pack_nodes(&c, 2, $3);
-									   pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
-									   $$ = create_node(0, tipolista_node, "tipo lista", NULL, 4, c);
+tipolista: tipounico '[' listadupla ']'{ Node **c;
+									   	 tipolista_attr *l = malloc(sizeof(tipolista_attr));
+									   	 listadupla_attr *ld = $3->attribute;
+									   	 l->tipo = node_type($1->type);
+									   	 l->ld = ld;
+									   	 l->size = node_size($1->type) * ld->size;
+										 pack_nodes(&c, 0, $1);
+									   	 pack_nodes(&c, 1, $3);
+									   	 $$ = create_node(0, tipolista_node, "tipo lista", l, 2, c);
 									 }
+		 /* compactados na producao acima
          | DOUBLE '[' listadupla ']' { Node **c;
 									   pack_nodes(&c, 0, create_leaf(0, double_node, "double", NULL));
 									   pack_nodes(&c, 1, create_leaf(0, opencol_node, "[", NULL));
@@ -234,32 +315,57 @@ tipolista: INT '[' listadupla ']'    { Node **c;
 									   pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
 									   $$ = create_node(0, tipolista_node, "tipo lista", NULL, 4, c);
 									 }
+									 */
          ;
 
-listadupla: INT_LIT ':' INT_LIT       		   { Node **c;
-									   		 	 pack_nodes(&c, 0, create_leaf(0, intlit_node, $1, NULL));
-									   			 pack_nodes(&c, 1, create_leaf(0, colon_node, ":", NULL));
-									   			 pack_nodes(&c, 2, create_leaf(0, intlit_node, $3, NULL));
-									   			 $$ = create_node(0, tipolista_node, "lista dupla", NULL, 3, c);
-									 		   }
+listadupla:	INT_LIT ':' INT_LIT { Node **c;
+								  listadupla_attr *l = malloc(sizeof(listadupla_attr));
+								  l->first = atoi($1);
+								  l->size = atoi($3) - l->first + 1;
+								  pack_nodes(&c, 0, create_leaf(0, intlit_node, $1, NULL));
+								  pack_nodes(&c, 1, create_leaf(0, intlit_node, $3, NULL));
+								  $$ = create_node(0, listadupla_node, "lista dupla", l, 2, c);
+								}
+		  | INT_LIT				{ Node **c;
+		  						  listadupla_attr *l = malloc(sizeof(listadupla_attr));
+								  l->first = 0;
+								  l->size = atoi($1) + 1;
+								  $$ = create_leaf(0, listadupla_node, $1, l);
+								}
+		  /* Não será implementado (arrays multidimensionais)
           | INT_LIT ':' INT_LIT ',' listadupla { Node **c;
+		  										 listadupla_attr *l = malloc(sizeof(listadupla_attr));
+												 listadupla_attr *aux = $5->attribute;
+												 int i;
+
+												 l->dim = aux->dim + 1;
+												 l->first[0] = atoi($1);
+												 for (i = 0; i < l->dim - 1; i++) {
+												     l->first[i+1] = aux->first[i];
+												 }
+												 l->dim_size = malloc(sizeof(int) * l->dim);
+												 l->dim_size[0] = atoi($3) - l->first[0] + 1;
+												 for (i = 0; i < l->dim; i++) {
+												     l->dim_size[i+1] = aux->dim_size[i];
+												 }
+												 l->size_total = aux->size_total + l->dim_size[0];
+
 									   			 pack_nodes(&c, 0, create_leaf(0, intlit_node, $1, NULL));
-									   			 pack_nodes(&c, 1, create_leaf(0, opencol_node, ":", NULL));
-												 pack_nodes(&c, 2, create_leaf(0, intlit_node, $3, NULL));
-									   			 pack_nodes(&c, 3, create_leaf(0, comma_node, ",", NULL));
-												 pack_nodes(&c, 4, $5);
-									   			 $$ = create_node(0, tipolista_node, "lista dupla", NULL, 5, c);
-									 		   }
+									   			 pack_nodes(&c, 1, create_leaf(0, intlit_node, $3, NULL));
+									   			 pack_nodes(&c, 2, $5);
+												 
+												 $$ = create_node(0, listadupla_node, "lista dupla", l, 3, c);
+									 		   } */
           ;
 
 acoes: comando ';'		 { Node **c;
 						   pack_nodes(&c, 0, $1);
 						   pack_nodes(&c, 1, create_leaf(0, semicolon_node, ";", NULL));
-						   
-						   // Attribute synth
-						   code_attr *attr = (code_attr*) malloc(sizeof(code_attr));;
-						   cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
 
+						   // Attribute synth
+						   code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
+						   cat_tac(&attr->code, &((code_attr*)c[0]->attribute)->code);
+						   
 						   $$ = create_node(0, acoes_node, "acoes", attr, 2, c);
 						 }
     | comando ';' acoes  { Node **c;
@@ -269,8 +375,8 @@ acoes: comando ';'		 { Node **c;
 						   
 						   // Attribute synth
  						   code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
-						   cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
-						   cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+						   cat_tac(&attr->code, &((code_attr*)c[0]->attribute)->code);
+						   cat_tac(&attr->code, &((code_attr*)c[2]->attribute)->code);
 						   
 						   $$ = create_node(0, acoes_node, "acoes", attr, 3, c);
 						 } 
@@ -280,19 +386,67 @@ comando: lvalue '=' expr { Node **c;
 						   pack_nodes(&c, 0, $1);
 						   pack_nodes(&c, 1, create_leaf(0, attrib_node, ":=", NULL));
 						   pack_nodes(&c, 2, $3);
-							
-						   $$ = create_node(0, comando_node, "comando", NULL, 3, c);
+
+						   // Attribute synth
+					       expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));;
+					  	   attr->local = ((expr_attr*)c[0]->attribute)->local;
+						   cat_tac(&attr->code, &((expr_attr*)c[0]->attribute)->code);
+						   cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
+						   struct tac *newcode = create_inst_tac(
+						   	   ((expr_attr*)c[0]->attribute)->local,
+						  	   "", // não entendi bem porque colocando qqr coisa aqui sai duplicado
+						  	   ((expr_attr*)c[2]->attribute)->local,
+						  	   ""
+					  	   );
+						   append_inst_tac(&attr->code, newcode);
+
+						   $$ = create_node(0, comando_node, "comando", attr, 3, c);
 						 } 
        | enunciado       { $$ = $1;}
        ;
 
-lvalue: IDF                   { $$ = create_leaf(0, idf_node, $1, NULL); }
+lvalue: IDF                   { entry_t *ref = lookup(symbol_table, $1);
+								if (ref == NULL) {
+									// variável não declarada
+								}
+								expr_attr *attr = (expr_attr*)malloc(sizeof(expr_attr));
+					  			attr->local = malloc(sizeof(char) * 8);
+					  			sprintf(attr->local, "%03d(SP)", ref->desloc);
+								
+								$$ = create_leaf(0, idf_node, $1, attr); 
+							  }
       | IDF '[' listaexpr ']' { Node **c;
 							    pack_nodes(&c, 0, create_leaf(0, idf_node, $1, NULL));
 							    pack_nodes(&c, 1, create_leaf(0, opencol_node, "[", NULL));
 							    pack_nodes(&c, 2, $3);
 							    pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
-							    $$ = create_node(0, tipolista_node, "lvalue", NULL, 4, c);
+
+							    entry_t *ref = lookup(symbol_table, $1);
+								if (ref == NULL) {
+									return picoerror(UNDEFINED_SYM_ERROR);
+								}
+								
+								int size = ((listadupla_attr *)ref->extra)->size;
+								int first = ((listadupla_attr *)ref->extra)->first;
+								int i = atoi((char *)((expr_attr*)c[2]->attribute)->local) - first + 1;
+								if (i < 0 || i >= size) {
+									return picoerror(OUT_OF_RANGE_ERROR);
+								}
+
+								int desloc;
+								switch (ref->type) {
+									case INT_TYPE:    desloc = ref->desloc + i * 1; break;
+									case FLOAT_TYPE:  desloc = ref->desloc + i * 4; break;
+									case CHAR_TYPE:   desloc = ref->desloc + i * 4; break;
+									case REAL_TYPE:   desloc = ref->desloc + i * 8; break;
+									case DOUBLE_TYPE: desloc = ref->desloc + i * 8; break;
+								}
+
+								expr_attr *attr = (expr_attr*)malloc(sizeof(expr_attr));
+					  			attr->local = malloc(sizeof(char) * 8);
+					  			sprintf(attr->local, "%03d(SP)", desloc);
+								
+							    $$ = create_node(0, idf_node, "lvalue", attr, 4, c);
 							  } 
       ;
 
@@ -402,7 +556,6 @@ expr: expr '+' expr { // Pack nodes
     | INT_LIT       { // Attribute synth
 					  expr_attr *attr = (expr_attr*) malloc(sizeof(expr_attr));
 					  attr->local = $1;
-			    					  
 					  $$ = create_leaf(0, intlit_node, $1, attr);
     				} 
     | F_LIT         { // Attribute synth
