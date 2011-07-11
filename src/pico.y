@@ -35,6 +35,13 @@
 		int size;            // tamanho dos elementos da lista (ld->size * node_size(tipo))
 		listadupla_attr *ld; // informacoes sobre a lista
 	} tipolista_attr;
+
+	// tipos booleanos
+	typedef struct _tipobool_attr {
+		char *t;
+		char *f;
+		struct node_tac *code;
+	} tipobool_attr;
 	
 	#define INT_TYPE	1
 	#define FLOAT_TYPE  2
@@ -142,6 +149,16 @@
 					insert_decl(dec->children[i], tipo);
 		}
 	}
+
+	/* Expressoes booleanas */
+
+	char* novo_rotulo() {
+		static int rotulo = 0;
+		char *ret = malloc(sizeof(char)*8);
+		sprintf(ret, "LABEL%03d", rotulo++);
+		return ret;
+	}
+
 
 %}
 
@@ -401,8 +418,8 @@ comando: lvalue '=' expr { Node **c;
 						   cat_tac(&attr->code, &((expr_attr*)c[2]->attribute)->code);
 						   struct tac *newcode = create_inst_tac(
 						   	   ((expr_attr*)c[0]->attribute)->local,
-						  	   "", // não entendi bem porque colocando qqr coisa aqui sai duplicado
-						  	   ((expr_attr*)c[2]->attribute)->local,
+						   	   ((expr_attr*)c[2]->attribute)->local,
+						  	   ":=",
 						  	   ""
 					  	   );
 						   append_inst_tac(&attr->code, newcode);
@@ -583,7 +600,7 @@ chamaproc: IDF '(' listaexpr ')' { Node **c;
 								 }
          ;
 
-enunciado: expr                                          { $$ = $1 ;}
+enunciado: expr                                          { $$ = $1; }
          | IF '(' expbool ')' THEN acoes fiminstcontrole { Node **c;
 														   pack_nodes(&c, 0, create_leaf(0, if_node, "if", NULL));
 														   pack_nodes(&c, 1, create_leaf(0, openpar_node, "(", NULL));
@@ -592,7 +609,25 @@ enunciado: expr                                          { $$ = $1 ;}
 														   pack_nodes(&c, 4, create_leaf(0, then_node, "then", NULL));
 														   pack_nodes(&c, 5, $6);
 														   pack_nodes(&c, 6, $7);
-														   $$ = create_node(0, enunciado_node, "enunciado", NULL, 7, c);
+
+//****************** Solução temporária para o IF */
+															// Attribute synth	
+													       code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
+													       cat_tac(&attr->code, &((tipobool_attr*)$3->attribute)->code);
+													  	   append_inst_tac(&attr->code, create_inst_tac(&((tipobool_attr*)$3->attribute)->t[0], "", "", ""));
+														   cat_tac(&attr->code, &((expr_attr*)$6->attribute)->code);
+														   fprintf(stderr, "**1**");
+														   char* next = novo_rotulo();
+														   append_inst_tac(&attr->code, create_inst_tac("GOTO",next,"",""));
+														   fprintf(stderr, "**2**");
+														   append_inst_tac(&attr->code, create_inst_tac(&((tipobool_attr*)$3->attribute)->f[0], "", "", ""));
+														   fprintf(stderr, "**3**");
+														   // else... cat_tac(&attr->code, &((expr_attr*)$7->attribute)->code);
+														   fprintf(stderr, "**4**");
+														   append_inst_tac(&attr->code, create_inst_tac(next,"","",""));
+														   fprintf(stderr, "**5**");
+
+														   $$ = create_node(0, enunciado_node, "enunciado", attr, 7, c);
 														 }
          | WHILE '(' expbool ')' '{' acoes '}'           { Node **c;
 														   pack_nodes(&c, 0, create_leaf(0, while_node, "while", NULL));
@@ -615,19 +650,41 @@ fiminstcontrole: END            { $$ = create_leaf(0, end_node, "end", NULL); }
 								}
                ;
 
-expbool: TRUE                 { $$ = create_leaf(0, true_node,  "true", NULL); }
-       | FALSE                { $$ = create_leaf(0, false_node, "false", NULL); }
-       | '(' expbool ')'      { Node **c;
-							    pack_nodes(&c, 0, create_leaf(0, openpar_node, "(", NULL));
-							    pack_nodes(&c, 1, $2);
-							    pack_nodes(&c, 2, create_leaf(0, closepar_node, ")", NULL));
-							    $$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+expbool: TRUE                 { tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+								append_inst_tac(&attr->code, create_inst_tac("GOTO",attr->t,"",""));
+								$$ = create_leaf(0, true_node, "true", attr);
 							  }
+       | FALSE                { tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+								append_inst_tac(&attr->code, create_inst_tac("GOTO",attr->f,"",""));
+								$$ = create_leaf(0, false_node, "false", attr);
+							  }
+       | '(' expbool ')'      { $$ = $2; }
        | expbool AND expbool  { Node **c;
 	   							pack_nodes(&c, 0, $1);
 							    pack_nodes(&c, 1, create_leaf(0, and_node, "and", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, and_node, "expbool", NULL, 3, c);
+								
+								// Attr synth
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								tipobool_attr *b1 = ((tipobool_attr *)$1->attribute);
+         						tipobool_attr *b2 = ((tipobool_attr *)$3->attribute);
+
+								//B → { B1.t = novo_rot ; B1.f = B.f} B1
+								//      and
+								//    { B2.t = B.t; B2.f = B.f } B2
+								//      { B.code = B1.code || label(B1.t) || B2.code }
+
+								attr->f = b1->f;
+								attr->t = b2->t;
+
+								cat_tac(&attr->code, &b1->code);
+								append_inst_tac(&attr->code,create_inst_tac(b1->t, "", "", ""));
+								cat_tac(&attr->code, &b2->code);
+								$$ = create_node(0, and_node, "expbool", attr, 3, c);
 							  }
        | expbool OR expbool   { Node **c;
 	   							pack_nodes(&c, 0, $1);
@@ -644,37 +701,109 @@ expbool: TRUE                 { $$ = create_leaf(0, true_node,  "true", NULL); }
 	   							pack_nodes(&c, 0, $1);
 							    pack_nodes(&c, 1, create_leaf(0, sup_node, ">", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+								
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								expr_attr *e1 = ((expr_attr *)$1->attribute);
+								expr_attr *e2 = ((expr_attr *)$3->attribute);
+
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+
+								cat_tac(&attr->code, &e1->code);
+								cat_tac(&attr->code, &e2->code);
+								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, ">", e2->local));
+								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
+								$$ = create_node(0, and_node, "expbool", attr, 3, c);
 							  }
 	   | expr '<' expr        { Node **c;
 	   							pack_nodes(&c, 0, $1);
 							    pack_nodes(&c, 1, create_leaf(0, inf_node, "<", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								expr_attr *e1 = ((expr_attr *)$1->attribute);
+								expr_attr *e2 = ((expr_attr *)$3->attribute);
+
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+
+								cat_tac(&attr->code, &e1->code);
+								cat_tac(&attr->code, &e2->code);
+								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "<", e2->local));
+								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
+								$$ = create_node(0, and_node, "expbool", attr, 3, c);
 							  }
        | expr LE expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 							    pack_nodes(&c, 1, create_leaf(0, inf_eq_node, "<=", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+								
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								expr_attr *e1 = ((expr_attr *)$1->attribute);
+								expr_attr *e2 = ((expr_attr *)$3->attribute);
+
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+
+								cat_tac(&attr->code, &e1->code);
+								cat_tac(&attr->code, &e2->code);
+								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "<=", e2->local));
+								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
+								$$ = create_node(0, and_node, "expbool", attr, 3, c);
 							  }
        | expr GE expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 							    pack_nodes(&c, 1, create_leaf(0, sup_eq_node, ">=", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+								
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								expr_attr *e1 = ((expr_attr *)$1->attribute);
+								expr_attr *e2 = ((expr_attr *)$3->attribute);
+
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+
+								cat_tac(&attr->code, &e1->code);
+								cat_tac(&attr->code, &e2->code);
+								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, ">=", e2->local));
+								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
+								$$ = create_node(0, and_node, "expbool", attr, 3, c);
 							  }
        | expr EQ expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 							    pack_nodes(&c, 1, create_leaf(0, eq_node, "=", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+								
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								expr_attr *e1 = ((expr_attr *)$1->attribute);
+								expr_attr *e2 = ((expr_attr *)$3->attribute);
+
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+
+								cat_tac(&attr->code, &e1->code);
+								cat_tac(&attr->code, &e2->code);
+								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "==", e2->local));
+								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
+								$$ = create_node(0, and_node, "expbool", attr, 3, c);
 							  }
        | expr NE expr         { Node **c;
 	   							pack_nodes(&c, 0, $1);
 							    pack_nodes(&c, 1, create_leaf(0, neq_node, "!=", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+								
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								expr_attr *e1 = ((expr_attr *)$1->attribute);
+								expr_attr *e2 = ((expr_attr *)$3->attribute);
+
+								attr->t = novo_rotulo();
+								attr->f = novo_rotulo();
+
+								cat_tac(&attr->code, &e1->code);
+								cat_tac(&attr->code, &e2->code);
+								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "!=", e2->local));
+								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
+								$$ = create_node(0, and_node, "expbool", attr, 3, c);
 							  }
        ;
 %%

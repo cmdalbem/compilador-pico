@@ -39,7 +39,16 @@ struct tac* create_inst_tac(const char* res, const char* arg1,
  * \return nada
  */
 void print_inst_tac(FILE* out, struct tac i) {
-   fprintf(out, "%s\t:= %s %s %s\n", i.res, i.arg1, i.op, i.arg2);
+   if (i.arg1[0] == '\0') fprintf(out, "%s:\n", i.res);
+   else if (i.arg2[0] == '\0') {
+      if (i.res[0] == 'G') fprintf(out, "%s %s\n", i.res, i.arg1);
+      else fprintf(out, "%s\t%s %s\n", i.res, i.op, i.arg1);
+   }
+   else if (i.op[0] == '\0') fprintf(out, "%s\t%s %s\n", i.res, i.arg1, i.op);
+   else {
+     if (i.op[0] == '<') fprintf(out, "IF %s %s %s GOTO %s\n", i.arg1, i.op, i.arg2, i.res);
+     else fprintf(out, "%s\t:= %s %s %s\n", i.res, i.arg1, i.op, i.arg2);
+   } 
 }
 
 /** \param[out] out arquivo de destino
