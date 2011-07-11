@@ -216,6 +216,13 @@
 %type<no> fiminstcontrole
 %type<no> expbool
 
+// precedencia de operadores (vide spec.pg25)
+%left '+' '-'
+%left '*' '/'
+%left OR
+%left AND
+%left NOT
+
 %start code
 
 %%
