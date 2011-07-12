@@ -17,6 +17,7 @@
 	
 	typedef struct _code_attr {
 		struct node_tac *code;
+		char *next;
 	}code_attr;
 	
 	// tipos para declaracoes de tipo
@@ -38,10 +39,17 @@
 
 	// tipos booleanos
 	typedef struct _tipobool_attr {
+		struct node_tac *code;
 		char *t;
 		char *f;
-		struct node_tac *code;
 	} tipobool_attr;
+	
+	// tipo while
+	typedef struct _while_attr {
+		struct node_tac *code;
+		char *next;
+		char *begin;
+	}while_attr;
 	
 	#define INT_TYPE	1
 	#define FLOAT_TYPE  2
@@ -601,43 +609,89 @@ chamaproc: IDF '(' listaexpr ')' { Node **c;
          ;
 
 enunciado: expr                                          { $$ = $1; }
-         | IF '(' expbool ')' THEN acoes fiminstcontrole { Node **c;
-														   pack_nodes(&c, 0, create_leaf(0, if_node, "if", NULL));
-														   pack_nodes(&c, 1, create_leaf(0, openpar_node, "(", NULL));
-														   pack_nodes(&c, 2, $3);
-														   pack_nodes(&c, 3, create_leaf(0, closepar_node, ")", NULL));
-														   pack_nodes(&c, 4, create_leaf(0, then_node, "then", NULL));
-														   pack_nodes(&c, 5, $6);
-														   pack_nodes(&c, 6, $7);
+         | IF '(' expbool ')' THEN acoes fiminstcontrole {
+															int hasElse = ($7->type == fimcontrole_node);
+															printf("hasElse? %i\n", hasElse);
+															
+															Node **c;
+															pack_nodes(&c, 0, create_leaf(0, if_node, "if", NULL));
+															pack_nodes(&c, 1, create_leaf(0, openpar_node, "(", NULL));
+															pack_nodes(&c, 2, $3); //B
+															pack_nodes(&c, 3, create_leaf(0, closepar_node, ")", NULL));
+															pack_nodes(&c, 4, create_leaf(0, then_node, "then", NULL));
+															pack_nodes(&c, 5, $6); //S1
+															pack_nodes(&c, 6, $7); //S2
 
-//****************** Solução temporária para o IF */
+
 															// Attribute synth	
-													       code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
-													       cat_tac(&attr->code, &((tipobool_attr*)$3->attribute)->code);
-													  	   append_inst_tac(&attr->code, create_inst_tac(&((tipobool_attr*)$3->attribute)->t[0], "", "", ""));
-														   cat_tac(&attr->code, &((expr_attr*)$6->attribute)->code);
-														   fprintf(stderr, "**1**");
-														   char* next = novo_rotulo();
-														   append_inst_tac(&attr->code, create_inst_tac("GOTO",next,"",""));
-														   fprintf(stderr, "**2**");
-														   append_inst_tac(&attr->code, create_inst_tac(&((tipobool_attr*)$3->attribute)->f[0], "", "", ""));
-														   fprintf(stderr, "**3**");
-														   // else... cat_tac(&attr->code, &((expr_attr*)$7->attribute)->code);
-														   fprintf(stderr, "**4**");
-														   append_inst_tac(&attr->code, create_inst_tac(next,"","",""));
-														   fprintf(stderr, "**5**");
+															code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
 
-														   $$ = create_node(0, enunciado_node, "enunciado", attr, 7, c);
+															//B.t = novo_rot
+															((tipobool_attr*)$3->attribute)->t = novo_rotulo(); //should be updating the '#' in "IF xxx GOTO LABEL#", but is not working (why?).
+															
+															// calcula S.next...
+															attr->next = novo_rotulo();//**********************TODO**********************
+															printf("calculated next: %s\n", attr->next);
+															
+															if(hasElse)
+																((tipobool_attr*)$3->attribute)->f = novo_rotulo();
+															else
+																((tipobool_attr*)$3->attribute)->f = attr->next;
+
+															//S1.next = S.next
+															((code_attr*)$6->attribute)->next = attr->next;
+															
+															//S1 and S2 attribute synth
+															if(hasElse) {
+																((code_attr*)$7->attribute)->next = attr->next; //S2.next = S.next
+																
+																cat_tac(&attr->code, &((tipobool_attr*)$3->attribute)->code); //B.code
+																append_inst_tac(&attr->code, create_inst_tac( ((tipobool_attr*)($3->attribute))->t, "", "", "") ); //geracod(B.t)
+																cat_tac(&attr->code, &((code_attr*)$6->attribute)->code); //S1.code														   
+																append_inst_tac(&attr->code, create_inst_tac( "GOTO",attr->next,"","") ); //geracod('goto' S.next)
+																append_inst_tac(&attr->code, create_inst_tac( ((tipobool_attr*)($3->attribute))->f, "", "", "") ); //geracod(B.f)
+																cat_tac(&attr->code, &((code_attr*)$7->attribute)->code); //S2.code												
+															}
+															else {
+																cat_tac(&attr->code, &((tipobool_attr*)$3->attribute)->code); //B.code
+																append_inst_tac(&attr->code, create_inst_tac( ((tipobool_attr*)($3->attribute))->t, "", "", "") ); //geracod(B.t)
+																cat_tac(&attr->code, &((code_attr*)$6->attribute)->code); //S1.code														   
+															}
+															append_inst_tac(&attr->code, create_inst_tac( attr->next,"","","") ); //geracod(S.next)
+															
+
+															$$ = create_node(0, enunciado_node, "enunciado", attr, 7, c);
 														 }
          | WHILE '(' expbool ')' '{' acoes '}'           { Node **c;
 														   pack_nodes(&c, 0, create_leaf(0, while_node, "while", NULL));
 														   pack_nodes(&c, 1, create_leaf(0, openpar_node, "(", NULL));
-														   pack_nodes(&c, 2, $3);
+														   pack_nodes(&c, 2, $3); //B
 														   pack_nodes(&c, 3, create_leaf(0, closepar_node, ")", NULL));
 														   pack_nodes(&c, 4, create_leaf(0, openbra_node, "{", NULL));
-														   pack_nodes(&c, 5, $6);
+														   pack_nodes(&c, 5, $6); //S1
 														   pack_nodes(&c, 6, create_leaf(0, closebra_node, "}", NULL));
-														   $$ = create_node(0, enunciado_node, "enunciado", NULL, 7, c);
+														   
+														   // Attribute synth	
+															while_attr *attr = (while_attr*) malloc(sizeof(while_attr));
+
+															// calcula S.next
+															attr->next = novo_rotulo(); //**********************TODO**********************
+
+															((tipobool_attr*)$3->attribute)->f = attr->next;
+															((tipobool_attr*)$3->attribute)->t = novo_rotulo();
+
+															attr->begin = novo_rotulo(); //S.begin = novo_rot
+															((while_attr*)$6->attribute)->next = attr->begin; //S1.next = S.begin
+
+															append_inst_tac(&attr->code, create_inst_tac( attr->begin,"","","") ); //geracod(S.begin)
+															cat_tac(&attr->code, &((tipobool_attr*)$3->attribute)->code); //B.code	
+															append_inst_tac(&attr->code, create_inst_tac( ((tipobool_attr*)($3->attribute))->t,"","","") ); //geracod(B.t)
+															cat_tac(&attr->code, &((code_attr*)$6->attribute)->code); //S1.code	
+															append_inst_tac(&attr->code, create_inst_tac( "GOTO",attr->begin,"","") ); //geracod('goto' S.begin)
+															append_inst_tac(&attr->code, create_inst_tac( attr->next,"","","") ); //geracod(S.begin)
+
+														   
+														   $$ = create_node(0, enunciado_node, "enunciado", attr, 7, c);
 														 }
          ;
 
@@ -646,7 +700,11 @@ fiminstcontrole: END            { $$ = create_leaf(0, end_node, "end", NULL); }
 								  pack_nodes(&c, 0, create_leaf(0, else_node, "else", NULL));
 								  pack_nodes(&c, 1, $2);
 								  pack_nodes(&c, 2, create_leaf(0, end_node, "end", NULL));
-								  $$ = create_node(0, fimcontrole_node, "fiminstcontrole", NULL, 3, c);
+								  
+								  code_attr *attr = (code_attr*) malloc(sizeof(code_attr));
+									cat_tac(&attr->code, &((code_attr*)$2->attribute)->code);
+								  
+								  $$ = create_node(0, fimcontrole_node, "fiminstcontrole", attr, 3, c);
 								}
                ;
 
