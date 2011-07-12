@@ -1,8 +1,4 @@
 %{
-	/* Aqui, pode-se inserir qualquer codigo C necessario ah compilacao
-	* final do parser. Sera copiado tal como esta no first do y.tab.c
-	* gerado por Yacc.
-	*/
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <string.h>
@@ -59,30 +55,25 @@
 
 	symbol_t symbol_table;
 	int memoria = 0;
+	int temps = 0;
 
 	char* novo_tmp(/*int type*/) {
 		int type = INT_TYPE;
 
-		/* eu implementei o tmp em funcao do deslocamento nos
-		   registradores, que depende do tipo do temporario.
-		   Por enquanto eu deixei como float (tam 4), mas
-		   provavelmente sera necessario criar um argumento. */
-
-		static int mem = 0;
 		int tamanho = 0;
 		switch (type) {
-			case INT_TYPE:    tamanho = 1; break;
+			case INT_TYPE:    tamanho = 4; break;
 			case FLOAT_TYPE:  tamanho = 4; break;
 			case DOUBLE_TYPE: tamanho = 8; break;
 			case REAL_TYPE:   tamanho = 8; break;
-			case CHAR_TYPE:   tamanho = 4; break;
+			case CHAR_TYPE:   tamanho = 1; break;
 			default:
 				tamanho = 8;
 		}
 		char *ret = malloc(sizeof(char)*8);
-		sprintf(ret, "%03d(Rx)", mem);
+		sprintf(ret, "%03d(Rx)", temps);
 		
-		mem += tamanho;
+		temps += tamanho;
 		return ret;
 	}
 
@@ -92,11 +83,11 @@
 	#define SYM_REDECLARED_ERROR -102
 	int picoerror(int error) {
 		if (error == UNDEFINED_SYM_ERROR)
-			fprintf(stderr, "Variavel nao declarada");
+			fprintf(stderr, "Variavel nao declarada\n");
 		if (error == OUT_OF_RANGE_ERROR)
-			fprintf(stderr, "Acesso ilegal ao array");
+			fprintf(stderr, "Acesso ilegal ao array\n");
 		if (error == SYM_REDECLARED_ERROR)
-			fprintf(stderr, "Variavel ja foi declarada");
+			fprintf(stderr, "Variavel ja foi declarada\n");
 		return error;
 	}
 
@@ -113,11 +104,11 @@
 
 	int node_size(Node_type t) {
 		switch (t) {
-			case int_node:    return 1;
+			case int_node:    return 4;
 			case float_node:  return 4;
 			case double_node: return 8;
 			case real_node:   return 8;
-			case char_node:   return 4;
+			case char_node:   return 1;
 			default:          return 8;
 		}
 	}
@@ -147,7 +138,8 @@
 				memoria += e->size;
 				insert(&symbol_table, e);
 			} else {
-				// erro de variavel ja declarada
+				picoerror(SYM_REDECLARED_ERROR);
+				exit(-1);
 			}
 		} else {
 			int i;
@@ -159,7 +151,6 @@
 	}
 
 	/* Expressoes booleanas */
-
 	char* novo_rotulo() {
 		static int rotulo = 0;
 		char *ret = malloc(sizeof(char)*8);
@@ -240,6 +231,7 @@
 %type<no> enunciado
 %type<no> fiminstcontrole
 %type<no> expbool
+%type<no> operbool
 
 // precedencia de operadores (vide spec.pg25)
 %left '+' '-'
@@ -319,35 +311,10 @@ tipolista: tipounico '[' listadupla ']'{ Node **c;
 									   	 $$ = create_node(0, tipolista_node, "tipo lista", l, 2, c);
 									 }
 		 /* compactados na producao acima
-         | DOUBLE '[' listadupla ']' { Node **c;
-									   pack_nodes(&c, 0, create_leaf(0, double_node, "double", NULL));
-									   pack_nodes(&c, 1, create_leaf(0, opencol_node, "[", NULL));
-									   pack_nodes(&c, 2, $3);
-									   pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
-									   $$ = create_node(0, tipolista_node, "tipo lista", NULL, 4, c);
-									 }
-         | FLOAT '[' listadupla ']'  { Node **c;
-									   pack_nodes(&c, 0, create_leaf(0, float_node, "float", NULL));
-									   pack_nodes(&c, 1, create_leaf(0, opencol_node, "[", NULL));
-									   pack_nodes(&c, 2, $3);
-									   pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
-									   $$ = create_node(0, tipolista_node, "tipo lista", NULL, 4, c);
-									 }
-         | CHAR '[' listadupla ']'   { Node **c;
-									   pack_nodes(&c, 0, create_leaf(0, char_node, "char", NULL));
-									   pack_nodes(&c, 1, create_leaf(0, opencol_node, "[", NULL));
-									   pack_nodes(&c, 2, $3);
-									   pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
-									   $$ = create_node(0, tipolista_node, "tipo lista", NULL, 4, c);
-									 }
-		 | REAL '[' listadupla ']'   { Node **c;
-									   pack_nodes(&c, 0, create_leaf(0, real_node, "real", NULL));
-									   pack_nodes(&c, 1, create_leaf(0, opencol_node, "[", NULL));
-									   pack_nodes(&c, 2, $3);
-									   pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
-									   $$ = create_node(0, tipolista_node, "tipo lista", NULL, 4, c);
-									 }
-									 */
+         | DOUBLE '[' listadupla ']' { }
+         | FLOAT '[' listadupla ']'  { }
+         | CHAR '[' listadupla ']'   { }
+		 | REAL '[' listadupla ']'   { }*/
          ;
 
 listadupla:	INT_LIT ':' INT_LIT { Node **c;
@@ -365,29 +332,7 @@ listadupla:	INT_LIT ':' INT_LIT { Node **c;
 								  $$ = create_leaf(0, listadupla_node, $1, l);
 								}
 		  /* Não será implementado (arrays multidimensionais)
-          | INT_LIT ':' INT_LIT ',' listadupla { Node **c;
-		  										 listadupla_attr *l = malloc(sizeof(listadupla_attr));
-												 listadupla_attr *aux = $5->attribute;
-												 int i;
-
-												 l->dim = aux->dim + 1;
-												 l->first[0] = atoi($1);
-												 for (i = 0; i < l->dim - 1; i++) {
-												     l->first[i+1] = aux->first[i];
-												 }
-												 l->dim_size = malloc(sizeof(int) * l->dim);
-												 l->dim_size[0] = atoi($3) - l->first[0] + 1;
-												 for (i = 0; i < l->dim; i++) {
-												     l->dim_size[i+1] = aux->dim_size[i];
-												 }
-												 l->size_total = aux->size_total + l->dim_size[0];
-
-									   			 pack_nodes(&c, 0, create_leaf(0, intlit_node, $1, NULL));
-									   			 pack_nodes(&c, 1, create_leaf(0, intlit_node, $3, NULL));
-									   			 pack_nodes(&c, 2, $5);
-												 
-												 $$ = create_node(0, listadupla_node, "lista dupla", l, 3, c);
-									 		   } */
+          | INT_LIT ':' INT_LIT ',' listadupla { } */
           ;
 
 acoes: comando ';'		 { Node **c;
@@ -438,13 +383,10 @@ comando: lvalue '=' expr { Node **c;
        ;
 
 lvalue: IDF                   { entry_t *ref = lookup(symbol_table, $1);
-								if (ref == NULL) {
-									// variável não declarada
-								}
+								if (ref == NULL) return picoerror(UNDEFINED_SYM_ERROR);
 								expr_attr *attr = (expr_attr*)malloc(sizeof(expr_attr));
 					  			attr->local = malloc(sizeof(char) * 8);
 					  			sprintf(attr->local, "%03d(SP)", ref->desloc);
-								
 								$$ = create_leaf(0, idf_node, $1, attr); 
 							  }
       | IDF '[' listaexpr ']' { Node **c;
@@ -454,16 +396,15 @@ lvalue: IDF                   { entry_t *ref = lookup(symbol_table, $1);
 							    pack_nodes(&c, 3, create_leaf(0, closecol_node, "]", NULL));
 
 							    entry_t *ref = lookup(symbol_table, $1);
-								if (ref == NULL) {
-									return picoerror(UNDEFINED_SYM_ERROR);
-								}
+								if (ref == NULL) return picoerror(UNDEFINED_SYM_ERROR);
 								
+								expr_attr *i = (expr_attr*)c[2]->attribute;
+
+								/*
 								int size = ((listadupla_attr *)ref->extra)->size;
 								int first = ((listadupla_attr *)ref->extra)->first;
 								int i = atoi((char *)((expr_attr*)c[2]->attribute)->local) - first + 1;
-								if (i < 0 || i >= size) {
-									return picoerror(OUT_OF_RANGE_ERROR);
-								}
+								if (i < 0 || i >= size) return picoerror(OUT_OF_RANGE_ERROR);
 
 								int desloc;
 								switch (ref->type) {
@@ -479,6 +420,20 @@ lvalue: IDF                   { entry_t *ref = lookup(symbol_table, $1);
 					  			sprintf(attr->local, "%03d(SP)", desloc);
 								
 							    $$ = create_node(0, idf_node, "lvalue", attr, 4, c);
+							    */
+
+							    expr_attr *attr = (expr_attr*)malloc(sizeof(expr_attr));
+					  			
+					  			char *res = novo_tmp();
+					  			char *desloc = malloc(sizeof(char)*12);
+					  			sprintf(desloc, "%d", ref->desloc);
+
+							    append_inst_tac(&attr->code, create_inst_tac(res,i->local,":=",""));
+							    append_inst_tac(&attr->code, create_inst_tac(res, res, "ADD", desloc));
+							    attr->local = malloc(sizeof(char) * 17);
+					  			strcpy(attr->local, res);
+					  			strcat(attr->local, "(000(SP))");
+								$$ = create_node(0, idf_node, "lvalue", attr, 4, c);
 							  } 
       ;
 
@@ -631,7 +586,6 @@ enunciado: expr                                          { $$ = $1; }
 															
 															// calcula S.next...
 															attr->next = novo_rotulo();//**********************TODO**********************
-															printf("calculated next: %s\n", attr->next);
 															
 															if(hasElse)
 																((tipobool_attr*)$3->attribute)->f = novo_rotulo();
@@ -731,11 +685,6 @@ expbool: TRUE                 { tipobool_attr *attr = malloc(sizeof(tipobool_att
 								tipobool_attr *b1 = ((tipobool_attr *)$1->attribute);
          						tipobool_attr *b2 = ((tipobool_attr *)$3->attribute);
 
-								//B → { B1.t = novo_rot ; B1.f = B.f} B1
-								//      and
-								//    { B2.t = B.t; B2.f = B.f } B2
-								//      { B.code = B1.code || label(B1.t) || B2.code }
-
 								attr->f = b1->f;
 								attr->t = b2->t;
 
@@ -746,18 +695,31 @@ expbool: TRUE                 { tipobool_attr *attr = malloc(sizeof(tipobool_att
 							  }
        | expbool OR expbool   { Node **c;
 	   							pack_nodes(&c, 0, $1);
-							    pack_nodes(&c, 1, create_leaf(0, or_node, "or", NULL));
+							    pack_nodes(&c, 1, create_leaf(0, and_node, "or", NULL));
 								pack_nodes(&c, 2, $3);
-								$$ = create_node(0, expbool_node, "expbool", NULL, 3, c);
+								
+								// Attr synth
+								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
+								tipobool_attr *b1 = ((tipobool_attr *)$1->attribute);
+         						tipobool_attr *b2 = ((tipobool_attr *)$3->attribute);
+
+								attr->f = b1->f;
+								attr->t = b2->t;
+
+								cat_tac(&attr->code, &b1->code);
+								append_inst_tac(&attr->code,create_inst_tac(b1->f, "", "", ""));
+								cat_tac(&attr->code, &b2->code);
+								$$ = create_node(0, or_node, "expbool", attr, 3, c);
 							  }
        | NOT expbool          { Node **c; 
 							    pack_nodes(&c, 0, create_leaf(0, not_node, "not", NULL));
 	   						    pack_nodes(&c, 1, $2); 
+	   						    // inverter os labels... (como?)
 								$$ = create_node(0, expbool_node, "expbool", NULL, 2, c); 
 							  }
-       | expr '>' expr        { Node **c;
+	   | expr operbool expr       { Node **c;
 	   							pack_nodes(&c, 0, $1);
-							    pack_nodes(&c, 1, create_leaf(0, sup_node, ">", NULL));
+							    pack_nodes(&c, 1, create_leaf(0, op_node, $2->lexeme, NULL));
 								pack_nodes(&c, 2, $3);
 								
 								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
@@ -771,102 +733,24 @@ expbool: TRUE                 { tipobool_attr *attr = malloc(sizeof(tipobool_att
 								cat_tac(&attr->code, &e2->code);
 								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, ">", e2->local));
 								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
-								$$ = create_node(0, and_node, "expbool", attr, 3, c);
-							  }
-	   | expr '<' expr        { Node **c;
-	   							pack_nodes(&c, 0, $1);
-							    pack_nodes(&c, 1, create_leaf(0, inf_node, "<", NULL));
-								pack_nodes(&c, 2, $3);
-
-								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
-								expr_attr *e1 = ((expr_attr *)$1->attribute);
-								expr_attr *e2 = ((expr_attr *)$3->attribute);
-
-								attr->t = novo_rotulo();
-								attr->f = novo_rotulo();
-
-								cat_tac(&attr->code, &e1->code);
-								cat_tac(&attr->code, &e2->code);
-								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "<", e2->local));
-								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
-								$$ = create_node(0, and_node, "expbool", attr, 3, c);
-							  }
-       | expr LE expr         { Node **c;
-	   							pack_nodes(&c, 0, $1);
-							    pack_nodes(&c, 1, create_leaf(0, inf_eq_node, "<=", NULL));
-								pack_nodes(&c, 2, $3);
-								
-								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
-								expr_attr *e1 = ((expr_attr *)$1->attribute);
-								expr_attr *e2 = ((expr_attr *)$3->attribute);
-
-								attr->t = novo_rotulo();
-								attr->f = novo_rotulo();
-
-								cat_tac(&attr->code, &e1->code);
-								cat_tac(&attr->code, &e2->code);
-								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "<=", e2->local));
-								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
-								$$ = create_node(0, and_node, "expbool", attr, 3, c);
-							  }
-       | expr GE expr         { Node **c;
-	   							pack_nodes(&c, 0, $1);
-							    pack_nodes(&c, 1, create_leaf(0, sup_eq_node, ">=", NULL));
-								pack_nodes(&c, 2, $3);
-								
-								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
-								expr_attr *e1 = ((expr_attr *)$1->attribute);
-								expr_attr *e2 = ((expr_attr *)$3->attribute);
-
-								attr->t = novo_rotulo();
-								attr->f = novo_rotulo();
-
-								cat_tac(&attr->code, &e1->code);
-								cat_tac(&attr->code, &e2->code);
-								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, ">=", e2->local));
-								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
-								$$ = create_node(0, and_node, "expbool", attr, 3, c);
-							  }
-       | expr EQ expr         { Node **c;
-	   							pack_nodes(&c, 0, $1);
-							    pack_nodes(&c, 1, create_leaf(0, eq_node, "=", NULL));
-								pack_nodes(&c, 2, $3);
-								
-								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
-								expr_attr *e1 = ((expr_attr *)$1->attribute);
-								expr_attr *e2 = ((expr_attr *)$3->attribute);
-
-								attr->t = novo_rotulo();
-								attr->f = novo_rotulo();
-
-								cat_tac(&attr->code, &e1->code);
-								cat_tac(&attr->code, &e2->code);
-								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "==", e2->local));
-								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
-								$$ = create_node(0, and_node, "expbool", attr, 3, c);
-							  }
-       | expr NE expr         { Node **c;
-	   							pack_nodes(&c, 0, $1);
-							    pack_nodes(&c, 1, create_leaf(0, neq_node, "!=", NULL));
-								pack_nodes(&c, 2, $3);
-								
-								tipobool_attr *attr = malloc(sizeof(tipobool_attr));
-								expr_attr *e1 = ((expr_attr *)$1->attribute);
-								expr_attr *e2 = ((expr_attr *)$3->attribute);
-
-								attr->t = novo_rotulo();
-								attr->f = novo_rotulo();
-
-								cat_tac(&attr->code, &e1->code);
-								cat_tac(&attr->code, &e2->code);
-								append_inst_tac(&attr->code,create_inst_tac(attr->t, e1->local, "!=", e2->local));
-								append_inst_tac(&attr->code,create_inst_tac("GOTO", attr->f, "", ""));
-								$$ = create_node(0, and_node, "expbool", attr, 3, c);
-							  }
+								$$ = create_node(0, op_node, "expbool", attr, 3, c);
+	   						  }
+	   /* Compactado na produção acima
+       | expr '>' expr        { }
+	   | expr '<' expr        { }
+       | expr LE expr         { }
+       | expr GE expr         { }
+       | expr EQ expr         { }
+       | expr NE expr         { }*/
        ;
+operbool: '>' { $$ = create_leaf(0, sup_node, ">", NULL); }
+		| '<' { $$ = create_leaf(0, inf_node, "<", NULL); }
+		| GE  { $$ = create_leaf(0, sup_eq_node, ">=", NULL); }
+		| LE  { $$ = create_leaf(0, inf_eq_node, "<=", NULL); }
+		| EQ  { $$ = create_leaf(0, eq_node, "==", NULL); }
+		| NE  { $$ = create_leaf(0, neq_node, "!=", NULL); }
+		;
 %%
- /* A partir daqui, insere-se qlqer codigo C necessario.
-  */
 
 char* progname;
 int lineno;
@@ -886,29 +770,16 @@ int main(int argc, char* argv[])
 
 	progname = argv[0];
 
-	//init_table(&symbol_table);
+	init_table(&symbol_table);
 
-	if (!yyparse()) 
-		printf("OKAY.\n");
-	else 
-		printf("ERROR.\n");
-
-	/*switch(syntax_tree->type) {
-	case int_node: 
-		printf("A AST se limita a uma folha rotulada por: %s\n", syntax_tree->lexeme);
-		break;
-	case plus_node:
-		printf("Soma de %s com %s.\n", syntax_tree->children[0]->lexeme, syntax_tree->children[1]->lexeme);
-		break;
-	case minus_node:
-		printf("Subtracao de %s com %s.\n", syntax_tree->children[0]->lexeme, syntax_tree->children[1]->lexeme);
-		break;
-	}*/
+	if (!yyparse()) printf("OKAY.\n");
+	else printf("ERROR.\n");
 
 	printf("Arvore final (altura %i):\n", height(syntax_tree));
 	printTree(syntax_tree);
 	
 	printf("Code:\n");
+	printf("%d\n%d\n", memoria, temps);
 	print_tac(stdout, ((code_attr*)syntax_tree->attribute)->code);
 	
 	return(0);
@@ -918,5 +789,3 @@ yyerror(char* s) {
   fprintf(stderr, "%s: %s", progname, s);
   fprintf(stderr, "line %d\n", lineno);
 }
-
-
